@@ -19,10 +19,14 @@ pre-trained on ImageNet.
  Upscaling is done using transposed convolutions (tf.contrib.layers.conv2d_transpose) and each layer includes 
 batch normalization.
 '''
-def extract_features(inputs, is_training):
+def extract_features(inputs, contexts, is_training):
 
     # TODO - Add skip connections between conv-deconv layers
     with slim.arg_scope(resnet_utils.resnet_arg_scope(is_training=is_training)):
+
+        conv1 = tf.layers.conv2d(inputs, filters=128, kernel_size=3, strides=1)
+
+        context_layer =
 
         net, end_points = resnet_v2.resnet_v2_101(inputs,
                                                 None,

@@ -5,7 +5,7 @@ import tensorflow as tf
 
 '''
  A Module that defines ImageReader class - to read and preprocess images and labels 
-from disk, and create a tensorflow queue of [img, label] pairs. 
+from disk, and create a tensorflow queue of [img, label] pairs. Preprocessing is designed to fit resnet format
 
  Output images are float arrays of shape (input_size[0], input_size[1], 3) and contain processed
 (cropped, resized) rgb data from jpeg files.
@@ -131,10 +131,14 @@ def read_images_from_disk(input_queue, input_size, random_scale, random_mirror, 
     label_contents = tf.read_file(input_queue[1])
 
     img = tf.image.decode_jpeg(img_contents, channels=3)
-    img_r, img_g, img_b = tf.split(axis=2, num_or_size_splits=3, value=img)
-    img = tf.cast(tf.concat(axis=2, values=[img_b, img_g, img_r]), dtype=tf.float32)
+    #img_r, img_g, img_b = tf.split(axis=2, num_or_size_splits=3, value=img)
+    #img = tf.cast(tf.concat(axis=2, values=[img_b, img_g, img_r]), dtype=tf.float32)
     # Extract mean.
-    img -= img_mean
+    if img.dtype != tf.float32:
+        img = tf.image.convert_image_dtype(img, dtype=tf.float32)
+
+    img = tf.subtract(img, 0.5)
+    img = tf.multiply(img, 2.0)
 
     label = tf.image.decode_png(label_contents, channels=1)
 
@@ -183,7 +187,7 @@ class ImageReader(object):
         self.image_list, self.label_list = read_labeled_image_list(self.data_dir, self.labels_dir, self.data_list)
         self.images = tf.convert_to_tensor(self.image_list, dtype=tf.string)
         self.labels = tf.convert_to_tensor(self.label_list, dtype=tf.string)
-        self.queue = tf.train.slice_input_producer([self.images, self.labels],
+        self.queue = tf.train.slice_input_producer([self.images, self.labels],num_epochs=50,
                                                    shuffle=input_size is not None)  # not shuffling if it is val
         self.image, self.label = read_images_from_disk(self.queue, self.input_size, random_scale, random_mirror,
                                                        ignore_label, img_mean)
