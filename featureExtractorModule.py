@@ -7,7 +7,9 @@ import skimage.io as io
 
 slim = tf.contrib.slim
 
-
+# input images dimensions. replace with values from ini file
+height = 128
+width = 128
 '''
  Code for feature extracting network. this network takes a batch of images shaped (batch, h, w, 3) and outputs
 a (batch, h, w, 64) matrix with a 64d feature vector for each pixel in an input image. size is guaranteed to perfectly 
@@ -24,11 +26,13 @@ def extract_features(inputs, contexts, is_training):
     # TODO - Add skip connections between conv-deconv layers
     with slim.arg_scope(resnet_utils.resnet_arg_scope(is_training=is_training)):
 
-        conv1 = tf.layers.conv2d(inputs, filters=128, kernel_size=3, strides=1)
+        conv1 = tf.layers.conv2d(inputs, filters=128, kernel_size=3, strides=1, padding='same')
 
-        context_layer =
+        context_layer = expand_context(contexts, height, width)
 
-        net, end_points = resnet_v2.resnet_v2_101(inputs,
+        contexted_batch = tf.concat([conv1, context_layer], axis=3)
+
+        net, end_points = resnet_v2.resnet_v2_101(contexted_batch,
                                                 None,
                                                 global_pool=False,
                                                 output_stride=16)
@@ -65,6 +69,11 @@ def deconv_block(inputs, num_inputs, num_outputs, stride=1, kernel_size=3, is_tr
     return output
 
 
+def expand_context(input, h, w):
 
+    tmp = tf.expand_dims(input, axis=1)
+    tmp = tf.expand_dims(tmp, axis=1)
+    output = tf.tile(tmp, [1,h,w,1])
 
+    return output
 
