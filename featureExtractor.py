@@ -14,18 +14,13 @@ from preprocessing import inception_preprocessing
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
-
-R_MEAN = 123.68
-G_MEAN = 116.78
-B_MEAN = 103.94
-
 batch_size = 5
 img_h = 384
 img_w = 384
 is_training = True
 k = 25
 
-
+logs_path = 'C:\Almog\MLProject/logs'
 # Path to checkpoint directory, for loading pre-trained resnet_101 weights (via tf.slim)
 checkpoints_dir = 'C:\Almog\MLProject/resnet_v2_101_2017_04_14/'
 
@@ -37,26 +32,32 @@ labels_dir = 'C:\Almog\MLProject\pascal voc\VOCtrainval_11-May-2012_2\Segmentati
 data_list = 'C:\Almog\MLProject\pascal voc\VOCtrainval_11-May-2012_2\ImageSets\Segmentation/train.txt'
 
 # Create placeholder for labels
-labels = tf.placeholder(tf.uint8, (batch_size, img_h, img_w, 1))
+labels = tf.placeholder(tf.uint8, shape=[batch_size, img_h, img_w, 1])
+sample_indices_holders = []
+for i in range(batch_size):
+    sample_indices_holders.append(tf.placeholder(tf.int32, shape=[None, 2], name=str(i)+'_holder'))
+sampled_vectors_batch = tf.placeholder(tf.float32, shape=[batch_size, None, 64])
 
 # Create an ImageReader instance to read images and labels from disk and turn into batches
 # more information in ImageReader.py
-mean = (R_MEAN, G_MEAN, B_MEAN)
 coord = tf.train.Coordinator()
 reader = ImageReader(data_dir, labels_dir, data_list=data_list, input_size=(img_h,img_w), random_scale=is_training
-                     , random_mirror=is_training, ignore_label=0, img_mean=mean, coord=coord)
+                     , random_mirror=is_training, ignore_label=0, coord=coord)
 
 # Collect a batch of batch_size [img, label] pairs, from tensorflow queue defined by reader
 inputs = reader.dequeue(batch_size)
 image_batch = inputs[0]
 label_batch = inputs[1]
 
+print(label_batch)
+contexts = tf.random_uniform((batch_size,1))
+
 # Define network operation. network is defined in featureExtractorModule.py
-features, scaled_feature_map = extract_features(image_batch, is_training)
+features, scaled_feature_map = extract_features(image_batch, contexts, is_training)
 
 # Define loss, optimizer, train_op
-loss = batch_loss(features, label_batch, k, batch_size)
-print(loss)
+loss = batch_loss_eval(features, labels, sample_indices_holders, k, batch_size)
+#idea for loss =====> sample vectors outside of loss, using evaluated img and label, and calculate loss based on these vectors
 train_op = tf.train.AdamOptimizer(0.01).minimize(loss)
 
 
@@ -67,22 +68,30 @@ init_fn = slim.assign_from_checkpoint_fn(
             os.path.join(checkpoints_dir, 'resnet_v2_101.ckpt'),
             slim.get_model_variables('resnet_v2_101'))
 
+writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
 
 # Training session
 with tf.Session() as sess:
 
     sess.run(init_global)
     sess.run(init_local)
-    init_fn(sess)
+    #init_fn(sess)
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
     try:
         while not coord.should_stop():
             # Run training steps or whatever
             # TODO - define loss and training op to run tf.train
-            #evaluated_labels = label_batch
-            #sess.run(train_op, feed_dict={labels:evaluated_labels})
-            sess.run(train_op)
+            evaluated_labels = np.array(sess.run(label_batch))
+            sample_indices_batch = get_instance_samples_batch(evaluated_labels, k, batch_size)
+            feed_dict = dict(zip(sample_indices_holders, sample_indices_batch))
+            feed_dict[labels] = evaluated_labels
+
+            #print(sample_indices_batch.shape)
+            sess.run(train_op, feed_dict=feed_dict)
+            print(loss)
+            #sess.run(train_op)
+
     except tf.errors.OutOfRangeError:
         print('Done training -- epoch limit reached')
     finally:
