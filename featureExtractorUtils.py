@@ -10,23 +10,21 @@ from tensorflow.python.framework import dtypes
 
 
 # ----------------need testing--------------------------
-def batch_loss_eval(features_batch, labels_batch, instance_sample_batch,  k, batch_size):
+def batch_loss_eval(features_batch, labels_batch, instance_sample_batch, masks_batch, weights_batch, k, batch_size):
 
-    sampled_vectors_batch = sample_feature_vectors_batch(features_batch, instance_sample_batch, batch_size)
+    sampled_vectors_batch = sample_feature_vectors_batch(features_batch, instance_sample_batch,batch_size)
 
     loss = []
     for i in range(batch_size):
-            loss.append(pairwise_loss(sampled_vectors_batch[i], labels_batch[i], k))
+            loss.append(pairwise_loss(sampled_vectors_batch[i], masks_batch[i], weights_batch[i]))
 
     loss = tf.convert_to_tensor(loss)
     return tf.reduce_sum(loss)
 
 
 # ----------------need testing--------------------------
-def pairwise_loss(sampled_vectors, label, k):
+def pairwise_loss(sampled_vectors, masks, weights):
 
-    instances, counts = get_object_sizes(label)
-    num_instances = np.size(instances)
 
     vectors = sampled_vectors
     squared_norms = tf.norm(vectors, axis=1)
@@ -38,7 +36,7 @@ def pairwise_loss(sampled_vectors, label, k):
     match_loss = tf.log(dist_matrix)
     mismatch_loss = tf.log(1-dist_matrix)
 
-    match_mask, mismatch_mask, weights = get_masks_and_weights(k, num_instances, counts)
+    match_mask, mismatch_mask = tf.cast(masks[0], tf.float32), tf.cast(masks[1], tf.float32)
 
     match_loss = tf.multiply(match_loss, match_mask)
     mismatch_loss = tf.multiply(mismatch_loss, mismatch_mask)
@@ -70,7 +68,7 @@ def get_masks_and_weights(k, num_instances, counts):
     weights = 1.0/weights
     weights = weights/np.sum(weights)
 
-    return mask, 1-mask, weights
+    return np.array([mask, 1-mask]), weights
 
 
 def sample_feature_vectors_batch(features_batch, instance_sample_batch, batch_size):
@@ -79,7 +77,7 @@ def sample_feature_vectors_batch(features_batch, instance_sample_batch, batch_si
     for i in range(batch_size):
         sampled_vectors_batch.append(sample_feature_vectors(features_batch[i], instance_sample_batch[i]))
 
-    return tf.convert_to_tensor(sampled_vectors_batch)
+    return sampled_vectors_batch
 
 
 def sample_feature_vectors(features, sample):
@@ -101,20 +99,26 @@ def get_object_sizes(label):
 def get_instance_samples_batch(label_batch, k, batch_size):
 
     instance_sample_batch =[]
+    masks_batch = []
+    weights_batch = []
 
     for i in range(batch_size):
-        instance_sample_batch.append(get_instance_samples(label_batch[i], k))
+        ret = get_instance_samples(label_batch[i], k)
+        instance_sample_batch.append(ret[0])
+        masks_batch.append(ret[1])
+        weights_batch.append(ret[2])
 
-    return instance_sample_batch
+    return instance_sample_batch, masks_batch, weights_batch
 
 
 def get_instance_samples(label, k):
 
     instances, counts = get_object_sizes(label)
+    masks, weights = get_masks_and_weights(k, np.size(instances)-1, counts)
 
     sample_locations = []
     for inst in instances:
-        if inst not in [0, 220]:
+        if inst not in [220]:
             object_indices = np.transpose(np.where(label==inst))
             sample_indices = np.random.choice(object_indices[0].size, k)
 
@@ -122,4 +126,4 @@ def get_instance_samples(label, k):
             y = object_indices[1][sample_indices]
             sample_locations.extend(np.array([x, y]).T)
 
-    return np.array(sample_locations)
+    return np.array(sample_locations), masks, weights

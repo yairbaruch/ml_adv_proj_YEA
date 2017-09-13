@@ -8,8 +8,8 @@ import skimage.io as io
 slim = tf.contrib.slim
 
 # input images dimensions. replace with values from ini file
-height = 384
-width = 384
+height = 192
+width = 192
 '''
  Code for feature extracting network. this network takes a batch of images shaped (batch, h, w, 3) and outputs
 a (batch, h, w, 64) matrix with a 64d feature vector for each pixel in an input image. size is guaranteed to perfectly 

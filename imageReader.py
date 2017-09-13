@@ -109,6 +109,7 @@ def read_labeled_image_list(data_dir, labels_dir, data_list):
 
 
 def read_images_from_disk(input_queue, input_size, random_scale, random_mirror, ignore_label):  # optional pre-processing arguments
+    # TODO - scale image before crop and pad
     """Read one image and its corresponding mask with optional pre-processing.
 
     Args:
@@ -138,8 +139,13 @@ def read_images_from_disk(input_queue, input_size, random_scale, random_mirror, 
 
     label = tf.image.decode_png(label_contents, channels=1)
 
+    #img_shape = tf.shape(img)
+    #label_shape = tf.shape(label)
+
     if input_size is not None:
         h, w = input_size
+        #target_ratio = float(h)/float(w)
+        #current_ratio = img_shape[0]
 
         # Randomly scale the images and labels.
         if random_scale:
